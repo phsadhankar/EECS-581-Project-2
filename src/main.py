@@ -1,7 +1,7 @@
 """
 Module: main.py
 
-Description: 
+Description:
     Controls the main Minesweeper game, including the Pygame window,
     game state, player input, and interaction with the game board.
 
@@ -16,7 +16,7 @@ Editors: John Pannell and Jake Crawford
 
 Creation Date: 09/19/26
 
-External Sources: 
+External Sources:
     - ChatGPT (GPT-5.6 Luna): Used for explanations and integration assistance. See AI Use Disclosure below.
     - Tech & Gaming, "How to make Minesweeper in Pygame - Step-by-Step Tutorial for beginner":
       https://www.youtube.com/watch?v=n0jZRlhLtt0
@@ -31,10 +31,10 @@ AI Use Disclosure:
     from other source files.
 
     Prompt: The following prompt is representative of the prompts used to assist with integration between components:
-        "Given our architectural components and other source files, assist in editing the Game class to ensure integration, correct logic, 
+        "Given our architectural components and other source files, assist in editing the Game class to ensure integration, correct logic,
         and reducing complexity. Any suggested changes must be explained so they can be reviewed and understood."
 
-    Changes After AI Assistance: All suggested code changes were reviewed and understood by the editors before being used. One change that was implemented 
+    Changes After AI Assistance: All suggested code changes were reviewed and understood by the editors before being used. One change that was implemented
     was the use of 'continue' statements in the 'events()' method to reduce unnecessary nested 'if' statements. AI assistance was also used to explain Pygame
     syntax related to initializing the screen, display, title, clock, and event handling. The editors verified the logic and made final decisions about which
     changes were incorporated into the file.
@@ -44,6 +44,7 @@ import sys
 import pygame
 from settings import *
 from sprites import Board
+from ai_solver import MinesweeperAI
 
 class Game:
     """
@@ -55,7 +56,7 @@ class Game:
 
     Inputs:
         num_mines: The number of mines selected by the user, from 10 to 20
-        
+
     Member Variables:
         - screen: The Pygame window used to display the game.
         - clock: Controls the game's frame rate.
@@ -98,6 +99,9 @@ class Game:
         self.first_click = True
         self.game_over = False
         self.win = False
+        self.winner = None # None, 'player', or 'ai'
+        self.player_moved = False # set when the player acts, cleared by the AI
+        self.ai = MinesweeperAI()
 
     def run(self):
         """
@@ -108,7 +112,7 @@ class Game:
 
         Inputs:
             None.
-        
+
         Outputs:
             None. Runs the game and manages the game and game-over loops.
         """
@@ -120,6 +124,8 @@ class Game:
             self.first_click = True
             self.game_over = False
             self.win = False
+            self.winner = None
+            self.player_moved = False
             self.flags_placed = 0
 
             # The main gameplay loop that keeps the game running while the player is still in progress
@@ -131,7 +137,7 @@ class Game:
             # Game-over loop that displays the end screen until restart
             while self.game_over:
                 self.end_screen() # display the game-over or victory screen and wait for input
-                self.clock.tick(FPS) # Combined: syntax to control the game-over loop speed necessary       
+                self.clock.tick(FPS) # Combined: syntax to control the game-over loop speed necessary
 
     def events(self):
         """
@@ -168,7 +174,7 @@ class Game:
 
             col = (mouse_x - MARGIN_LEFT) // TILESIZE # convert the x coordinate to a board column
             row = (mouse_y - MARGIN_TOP) // TILESIZE # convert the y coordinate to a board row
-        
+
             # Confirm the resulting column and row is one of the 10x10 cells
             if not (0 <= col < COLS and 0 <= row < ROWS):
                 continue
@@ -198,6 +204,10 @@ class Game:
                     self.game_over = True
                     self.reveal_all_mines()
 
+                else:
+                    # Record that the player moved so the opponent replies once.
+                    self.player_moved = True
+
                 self.check_win() # check if player has won the game
 
             # For a right click on a non-revealed flag, we must add or remove a flag
@@ -205,7 +215,7 @@ class Game:
 
                 # If the tile is already flagged, we must remove it
                 if tile.flagged:
-                    tile.flagged = False 
+                    tile.flagged = False
                     self.flags_placed -= 1
 
                 # Otherwise, mark the tile as flagged
@@ -215,13 +225,59 @@ class Game:
                         tile.flagged = True
                         self.flags_placed += 1
 
+                # Record that the player moved so the opponent replies once.
+                self.player_moved = True
+
+        # The opponent replies once, and only once, after the player has moved.
+        # events() runs every frame, so without this check the opponent would
+        # keep playing on its own and finish the board by itself.
+        if AI_AUTO_PLAY_ENABLED and self.playing and self.player_moved:
+            self.player_moved = False
+            self.play_ai_turn()
+
+    """AI TURN FUNCTION"""
+    def play_ai_turn(self):
+
+        for col, row, action in self.ai.take_turn(self.board):
+
+            # Pause first so the player can see the board the move was chosen on.
+            pygame.time.wait(AI_MOVE_DELAY_MS)
+
+            # The board reports False when the move uncovers a mine.
+            safe = self.board.execute_ai_action(col, row, action)
+
+            # Recount the flags so the HUD also shows the opponent's flags.
+            self.flags_placed = self.count_flags()
+
+            if not safe:
+                self.playing = False
+                self.game_over = True
+                self.winner = 'player'
+                self.reveal_all_mines()
+                return
+
+        # The opponent may have cleared the last safe cell on its turn.
+        self.check_win(winner='ai')
+
+    """COUNT THE FLAGS ON THE BOARD"""
+    def count_flags(self):
+        total = 0
+
+        # This will go through every column and row looking for a flag.
+        for x in range(COLS):
+            for y in range(ROWS):
+                if self.board.board_list[x][y].flagged:
+                    total += 1
+
+        return total
+
     """REVEAL ALL MINES FUNCTION"""
     def reveal_all_mines(self):
         """
         This function is used when the player loses. It loops through every
         tile on the board, checks whether the tile is a mine by looking for an X,
         and if it is a mine, it changes its revealed value to true so that all the mines
-        become visible. 
+        become visible.
         """
 
         # Show where all mines were once the player loses
@@ -235,33 +291,35 @@ class Game:
                     self.board.board_list[x][y].revealed = True
 
     """Check for a win condition"""
-    def check_win(self):
-        """ 
+    def check_win(self, winner='player'):
+        """
         This funciton checks whether the player has won. That it will go through
         the entire board and counts any tiles that are still covered but aren't mines.
         If that count reaches zero, there aren't safe tiles left to uncover, so
-        the game ends and the player is marked as the winner. 
+        the game ends and the player is marked as the winner. The winner argument
+        records whether the player or the opponent cleared the board.
         """
 
         # Count remaining non-mine tiles
         # This function will check if the player has revealed every non-mine tile.
 
-        # This is the initial start number of the unrevealed safe tiles at zero. 
+        # This is the initial start number of the unrevealed safe tiles at zero.
         unrevealed_safe = 0
 
-        # This will search every tile on the board to see if it is a mine or not. 
+        # This will search every tile on the board to see if it is a mine or not.
         # If it is not a mine and it is not revealed, it will add to the unrevealed safe count.
         for x in range(COLS):
             for y in range(ROWS):
                 if not self.board.board_list[x][y].revealed and self.board.board_list[x][y].type != 'X':
                     unrevealed_safe += 1
-        
-        #The winning declaration will be made as soon as the unrevealed safe count is equal to zero.    
+
+        #The winning declaration will be made as soon as the unrevealed safe count is equal to zero.
         # If all safe cells are revealed, you win
         if unrevealed_safe == 0:
             self.playing = False
             self.game_over = True
             self.win = True
+            self.winner = winner
 
 
 
@@ -274,23 +332,26 @@ class Game:
         The draw funciton controls the overall game display. It clears the previous
         Screen determines whether the status should say Playing, Game Over, or Victory,
         displays the number of flags remaining, creates the A through J and 1 through 10 labels,
-        tells the board to draw the tiles, and then updates the Pygame window. 
+        tells the board to draw the tiles, and then updates the Pygame window.
         """
 
         # This will clear the old screen by filling it in with a background color.
         self.screen.fill(BG_COLOR)
-        
+
         # The Game status!
         # This will display the current status on the game at the top of the screen.
 
-        if self.win:
-            status_msg = "Victory! (Click to Restart)"
+        if self.winner == 'player':
+            status_msg = "You Win! (Click to Restart)"
+
+        elif self.winner == 'ai':
+            status_msg = "AI Wins! (Click to Restart)"
 
         elif self.game_over:
             status_msg = "Game Over (Click to Restart)"
 
         else:
-            status_msg = "Playing"
+            status_msg = "Playing | AI: Random Guesser"
 
 
         # HUD TEXT
@@ -324,9 +385,9 @@ class Game:
     def end_screen(self):
         """
         The end-screen function handles the game after a win or loss. It still checks
-        whether the player closes the window, and if they click the mouse, it leaves the 
-        game-over state so another round can begin. While waiting, it continues drawing the 
-        finished board. 
+        whether the player closes the window, and if they click the mouse, it leaves the
+        game-over state so another round can begin. While waiting, it continues drawing the
+        finished board.
         """
 
         # This function will handle what happens after the player wins or loses.
@@ -351,13 +412,13 @@ if __name__ == "__main__":
     """
     This is the starting point of the program. It asks the player to select between
     10 and 20 mines and validates the input. Once a valid number is entered, it creates
-    the Game object using that mine count and calls game.run() to start Minesweeper. 
+    the Game object using that mine count and calls game.run() to start Minesweeper.
     """
 
-    # This is where the Minesweeper program starts. 
+    # This is where the Minesweeper program starts.
     # It will prompt the user for the number of mines and then start the game loop.
     print("=== EECS 581: Minesweeper ===")
-    
+
     # Keep asking until the player enters a valid number of mines between 10 and 20.
     while True:
         try:
@@ -368,7 +429,7 @@ if __name__ == "__main__":
             #covert the player's input into an integer.
             num = int(val)
 
-            # If the number is between 10 and 20, then accept it. 
+            # If the number is between 10 and 20, then accept it.
             if 10 <= num <= 20:
                 break
             print("Please enter a number between 10 and 20.")

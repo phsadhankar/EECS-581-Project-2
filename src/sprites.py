@@ -106,7 +106,7 @@ class Board:
 
         # Build a list of every position where a mine is allowed.
         available = [(x, y) for x in range(COLS) for y in range(ROWS) if (x, y) not in safe_zone]
-        
+
         # Use random.sample for unique positions so mines cannot overlap.
         mine_spots = random.sample(available, num_mines)
         for x, y in mine_spots:
@@ -226,7 +226,7 @@ class Board:
                 # A revealed tile can show a mine, a clue, or nothing.
                 if tile.revealed:
                     pygame.draw.rect(surface, TILE_REVEALED, rect)
-                    
+
                     if tile.type == 'X':
                         # Draw the mine as a black circle in the center.
                         center = (pos_x + TILESIZE // 2, pos_y + TILESIZE // 2)
@@ -239,7 +239,7 @@ class Board:
                 else:
                     # Covered tiles all use the same color to hide their type.
                     pygame.draw.rect(surface, TILE_UNREVEALED, rect)
-                    
+
                     if tile.flagged:
                         # Make the flag from a red triangle and a dark pole.
                         flag_points = [
@@ -252,3 +252,34 @@ class Board:
 
                 # Draw a thin border around each tile
                 pygame.draw.rect(surface, GRID_COLOR, rect, 1)
+
+    def get_unrevealed_cells(self):
+        cells = []
+        for x in range(COLS):
+            for y in range(ROWS):
+                tile = self.board_list[x][y]
+                if not tile.revealed and not tile.flagged:
+                    cells.append((x, y))
+        return cells
+
+    def execute_ai_action(self, x, y, action_type):
+        # Reject any coordinate that is off the board.
+        if not (0 <= x < COLS and 0 <= y < ROWS):
+            return False
+
+        tile = self.board_list[x][y]
+
+        if action_type == 'FLAG':
+
+            # Set the flag instead of toggling it, because the computer only
+            # ever flags cells that its rules have proven are mines.
+            tile.flagged = True
+            return True
+
+        if action_type == 'REVEAL':
+
+            # dig() returns False when a mine is uncovered, which is how the
+            # caller learns that the computer has lost.
+            return self.dig(x, y)
+
+        return False

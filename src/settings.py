@@ -49,3 +49,7 @@ NUM_COLORS = {
     7: (0, 0, 0),         # black
     8: (128, 128, 128)    # gray
 }
+
+# AI configuration
+AI_AUTO_PLAY_ENABLED = True    # if True, the opponent takes a turn after the player
+AI_MOVE_DELAY_MS = 100         # pause between opponent moves so they can be followed
