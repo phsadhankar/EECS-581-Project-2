@@ -6,16 +6,16 @@
 
 # Minesweeper
 **Version:** 1.1  
-**Date:** 09/27/2026  
+**Date:** 09/28/2026  
 **Document Identifier:** MS-SAP2-1.1
 
 # Software Architecture Document
-## Version 1.0
+## Version 1.1
 
 | Date | Version | Description | Author |
 |------|---------|-------------|--------|
 | 09/27/2026 | 1.0 | Initial creation of Project 2 Software Architecture Document | Ivan Kullaya |
-| 09/27/2026 | 1.1 | Expanded initial architecture draft based on inherited Group 18 implementation and current Easy AI implementation | Ivan Kullaya |
+| 09/28/2026 | 1.1 | Expanded initial architecture draft based on inherited Group 18 implementation and current Easy AI implementation | Ivan Kullaya |
 
 # Table of Contents
 
