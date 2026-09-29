@@ -242,33 +242,49 @@ class Game:
             self.play_ai_turn()
 
     def hint(self):
+        # if player has hints remaining
         if self.hints > 0:
+            # if the click is first in the game
             if self.first_click:
+                # get a random column and row
                 col = random.randint(0, COLS - 1)
                 row = random.randint(0, ROWS - 1)
 
+                # place mines and calculate clues
                 self.board.place_mines(col, row, self.num_mines)
                 self.board.place_clues()
                 self.first_click = False
 
+                # recursively reveal tiles at the random safe tile
                 self.board.dig(col, row)
+                # check if player won
                 self.check_win()
+                # decrement player hints by one
                 self.hints -= 1
                 return
 
+            # set up a list of potential safe tiles
             safe_tiles = []
 
+            # iterate through all columns and rows
             for col in range(COLS):
                 for row in range(ROWS):
+                    # get the tile at that location
                     tile = self.board.board_list[col][row]
+                    # if its not revealed and not flagged, and its not a mine, add it as a potential safe tile
                     if not tile.revealed and not tile.flagged and tile.type != 'X':
                         safe_tiles.append((col, row))
 
+            # if there are any safe tiles
             if len(safe_tiles) != 0:
+                # get a random tile from the list
                 tile_col, tile_row = random.choice(safe_tiles)
+                # recursively reveal tiles at the random safe tile
                 self.board.dig(tile_col, tile_row)
+                # check if player won
                 self.check_win()
 
+            # decrement player hints by one
             self.hints -= 1
 
     """AI TURN FUNCTION"""
@@ -417,9 +433,12 @@ class Game:
         # Draw actual tiles
         self.board.draw(self.screen, self.font)
 
+        # create a rectangle for the hint button
         self.hint_box = pygame.Rect(20, MARGIN_TOP + (ROWS * TILESIZE) + 2, 80, 24)
+        # draw it on the game
         pygame.draw.rect(self.screen, (200, 200, 200), self.hint_box, border_radius=3)
         pygame.draw.rect(self.screen, GRID_COLOR, self.hint_box, width=2, border_radius=3)
+        # draw the button text using the remaining hints
         hint_text = self.font.render(f"Hint ({self.hints})", True, TEXT_COLOR)
         text_rect = hint_text.get_rect(center=self.hint_box.center)
         self.screen.blit(hint_text, text_rect)
@@ -486,17 +505,21 @@ if __name__ == "__main__":
         except ValueError:
             print("Invalid input, must be an integer.")
 
+    # keep asking until player enters a valid number of hints
     while True:
         try:
+            # get the number of hints from the player
             hints = input("Enter number of hints (0 to 3): ").strip()
-            
+
+            # conver the input to an integer
             hints_num = int(hints)
-            
+
+            # if it is in an acceptable range, break out of the while loop
             if 0 <= hints_num <= 3:
                 break
             print("Please enter a number between 0 and 3.")
             
-                        # If the player did not enter an integer, show an error message.
+        # If the player did not enter an integer, show an error message.
         except ValueError:
             print("Invalid input, must be an integer.")
 
