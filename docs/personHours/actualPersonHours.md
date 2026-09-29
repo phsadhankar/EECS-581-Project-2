@@ -25,8 +25,9 @@ Time spent attending EECS 581 lectures is not included.
 |:----:|:--------:|:-----:|
 | 09/24/2026 | Attended GTA team meeting and discussed project 2 planning | 0.33 |
 | 09/26/2026 | Attended virtual team meeting and project requirements and task assignments | 0.50 |
+| 09/29/2026 | Worked on hint feature | 1.50 |
 
-**TOTAL HOURS: 0.83**
+**TOTAL HOURS: 2.33**
 
 ## Ivan Kullaya
 | Date | Activity | Hours |

@@ -46,6 +46,8 @@ from settings import *
 from sprites import Board
 from ai_solver import MinesweeperAI
 
+import random
+
 class Game:
     """
     Manages the overall Minesweeper game.
@@ -73,7 +75,7 @@ class Game:
         An interactive Pygame Minesweeper game.
     """
 
-    def __init__(self, num_mines):
+    def __init__(self, num_mines, num_hints):
         """
         Initializes the Minesweeper game and the Pygame components.
 
@@ -102,6 +104,7 @@ class Game:
         self.winner = None # None, 'player', or 'ai'
         self.player_moved = False # set when the player acts, cleared by the AI
         self.ai = MinesweeperAI()
+        self.hints = num_hints
 
     def run(self):
         """
@@ -165,6 +168,9 @@ class Game:
             # Ignore events that are not mouse button presses
             if event.type != pygame.MOUSEBUTTONDOWN:
                 continue
+
+            if event.button == 1 and self.hint_box.collidepoint(event.pos):
+                self.hint()
 
             mouse_x, mouse_y = pygame.mouse.get_pos() # get the mouse position in pixels
 
@@ -234,6 +240,36 @@ class Game:
         if AI_AUTO_PLAY_ENABLED and self.playing and self.player_moved:
             self.player_moved = False
             self.play_ai_turn()
+
+    def hint(self):
+        if self.hints > 0:
+            if self.first_click:
+                col = random.randint(0, COLS - 1)
+                row = random.randint(0, ROWS - 1)
+
+                self.board.place_mines(col, row, self.num_mines)
+                self.board.place_clues()
+                self.first_click = False
+
+                self.board.dig(col, row)
+                self.check_win()
+                self.hints -= 1
+                return
+
+            safe_tiles = []
+
+            for col in range(COLS):
+                for row in range(ROWS):
+                    tile = self.board.board_list[col][row]
+                    if not tile.revealed and not tile.flagged and tile.type != 'X':
+                        safe_tiles.append((col, row))
+
+            if len(safe_tiles) != 0:
+                tile_col, tile_row = random.choice(safe_tiles)
+                self.board.dig(tile_col, tile_row)
+                self.check_win()
+
+            self.hints -= 1
 
     """AI TURN FUNCTION"""
     def play_ai_turn(self):
@@ -380,6 +416,14 @@ class Game:
 
         # Draw actual tiles
         self.board.draw(self.screen, self.font)
+
+        self.hint_box = pygame.Rect(20, MARGIN_TOP + (ROWS * TILESIZE) + 2, 80, 24)
+        pygame.draw.rect(self.screen, (200, 200, 200), self.hint_box, border_radius=3)
+        pygame.draw.rect(self.screen, GRID_COLOR, self.hint_box, width=2, border_radius=3)
+        hint_text = self.font.render(f"Hint ({self.hints})", True, TEXT_COLOR)
+        text_rect = hint_text.get_rect(center=self.hint_box.center)
+        self.screen.blit(hint_text, text_rect)
+
         pygame.display.flip()
 
     def end_screen(self):
@@ -419,6 +463,10 @@ if __name__ == "__main__":
     # It will prompt the user for the number of mines and then start the game loop.
     print("=== EECS 581: Minesweeper ===")
 
+    # start game w 10 mines automatically
+    # game = Game(10)
+    # game.run()
+
     # Keep asking until the player enters a valid number of mines between 10 and 20.
     while True:
         try:
@@ -438,8 +486,23 @@ if __name__ == "__main__":
         except ValueError:
             print("Invalid input, must be an integer.")
 
+    while True:
+        try:
+            hints = input("Enter number of hints (0 to 3): ").strip()
+            
+            hints_num = int(hints)
+            
+            if 0 <= hints_num <= 3:
+                break
+            print("Please enter a number between 0 and 3.")
+            
+                        # If the player did not enter an integer, show an error message.
+        except ValueError:
+            print("Invalid input, must be an integer.")
+
+
     # Create the game using the players selected number of mines.
-    game = Game(num)
+    game = Game(num, hints_num)
 
     # Start running the Minesweeper game loop.
     game.run()
