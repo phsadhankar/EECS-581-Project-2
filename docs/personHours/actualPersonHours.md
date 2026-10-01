@@ -16,7 +16,7 @@ Time spent attending EECS 581 lectures is not included.
 |:----:|:--------:|:-----:|
 | 09/24/2026 | Attended GTA team meeting and discussed project 2 planning | 0.33 |
 | 09/26/2026 | Attended virtual team meeting and project requirements and task assignments | 0.50 |
-| 09/27/2026 | Developed the Medium AI difficulty | -- |
+| 09/27/2026 | Developed the Medium AI difficulty | 2.50 |
 
 **TOTAL HOURS: --**
 
