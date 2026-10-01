@@ -413,10 +413,12 @@ class Game:
 
         # Flags left = total mines - flags already placed.
         mines = self.font.render(f"Flags Left: {self.num_mines - self.flags_placed}", True, TEXT_COLOR)
+        mine_count = self.font.render(f"Mine count: {self.num_mines}", True, TEXT_COLOR)
 
         # This will put the text onto the game window.
         self.screen.blit(status, (20, 15))
         self.screen.blit(mines, (WIDTH - 150, 15))
+        self.screen.blit(mine_count, (WIDTH - 150, 35))
 
         # Render column headers A through J
         cols_text = "ABCDEFGHIJ"
