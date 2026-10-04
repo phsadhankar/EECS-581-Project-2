@@ -44,6 +44,15 @@ import sys
 import pygame
 from settings import *
 from sprites import Board
+from ai_solver import (
+    AIMode,
+    ActionType,
+    Difficulty,
+    MinesweeperSolver,
+    observation_from_board,
+)
+
+AI_STEP_DELAY_MS = 850
 
 class Game:
     """
@@ -72,7 +81,12 @@ class Game:
         An interactive Pygame Minesweeper game.
     """
 
-    def __init__(self, num_mines):
+    def __init__(
+        self,
+        num_mines,
+        ai_mode=AIMode.HUMAN_ONLY,
+        difficulty=Difficulty.EASY,
+    ):
         """
         Initializes the Minesweeper game and the Pygame components.
 
@@ -98,6 +112,12 @@ class Game:
         self.first_click = True
         self.game_over = False
         self.win = False
+        self.ai_mode = AIMode(ai_mode)
+        self.difficulty = Difficulty(difficulty)
+        self.solver = MinesweeperSolver(self.difficulty)
+        self.ai_turn = False
+        self.ai_paused = False
+        self.next_ai_step = 0
 
     def run(self):
         """
@@ -121,10 +141,15 @@ class Game:
             self.game_over = False
             self.win = False
             self.flags_placed = 0
+            self.solver.reset()
+            self.ai_turn = self.ai_mode is AIMode.AUTOMATIC
+            self.ai_paused = False
+            self.next_ai_step = pygame.time.get_ticks() + AI_STEP_DELAY_MS
 
             # The main gameplay loop that keeps the game running while the player is still in progress
             while self.playing:
                 self.events() # process inputs and game events
+                self.advance_ai()
                 self.draw() # update the display of the game
                 self.clock.tick(FPS) # Combined: syntax to control the game loop speed necessary
 
@@ -148,72 +173,118 @@ class Game:
             None. Updates the game board and game state.
         """
 
-        # Combined: Check each event received from Pygame
         for event in pygame.event.get():
-
-            # Handle the window close to shut down Pygame
             if event.type == pygame.QUIT:
                 pygame.quit()
                 sys.exit()
 
-            # Ignore events that are not mouse button presses
             if event.type != pygame.MOUSEBUTTONDOWN:
                 continue
 
-            mouse_x, mouse_y = pygame.mouse.get_pos() # get the mouse position in pixels
+            if self.game_over or not self.playing:
+                continue
+            if self.ai_mode is AIMode.AUTOMATIC:
+                continue
+            if self.ai_mode is AIMode.INTERACTIVE and self.ai_turn:
+                continue
 
-            # Confirm the mouse click is within the board area
+            mouse_x, mouse_y = event.pos
+
             if mouse_x < MARGIN_LEFT or mouse_y < MARGIN_TOP:
                 continue
 
-            col = (mouse_x - MARGIN_LEFT) // TILESIZE # convert the x coordinate to a board column
-            row = (mouse_y - MARGIN_TOP) // TILESIZE # convert the y coordinate to a board row
+            col = (mouse_x - MARGIN_LEFT) // TILESIZE
+            row = (mouse_y - MARGIN_TOP) // TILESIZE
         
-            # Confirm the resulting column and row is one of the 10x10 cells
             if not (0 <= col < COLS and 0 <= row < ROWS):
                 continue
 
-            tile = self.board.board_list[col][row] # get the tile clicked
+            tile = self.board.board_list[col][row]
+            changed = False
 
-            # Reveal the tile with a left click on a non-flagged tile
-            if event.button == 1 and not tile.flagged:
+            if event.button == 1:
+                changed = self.reveal_cell(col, row)
+            elif event.button == 3:
+                changed = self.toggle_flag(col, row)
 
-                # Set up the mines after the first click
-                if self.first_click:
+            if (
+                changed
+                and self.playing
+                and self.ai_mode is AIMode.INTERACTIVE
+            ):
+                self.ai_turn = True
 
-                    # Randomly place mines keeping the first click safe
-                    self.board.place_mines(col, row, self.num_mines)
+    def reveal_cell(self, col, row):
+        """Reveal through the same Board logic for both the player and AI."""
+        tile = self.board.board_list[col][row]
+        if self.game_over or tile.revealed or tile.flagged:
+            return False
 
-                    # Calculate the adjacent mine count for each tile
-                    self.board.place_clues()
+        if self.first_click:
+            self.board.place_mines(col, row, self.num_mines)
+            self.board.place_clues()
+            self.first_click = False
 
-                    self.first_click = False # the first click has now happened
+        safe = self.board.dig(col, row)
+        if not safe:
+            self.playing = False
+            self.game_over = True
+            self.reveal_all_mines()
+            return True
 
-                # Check to see if there is a mine
-                safe = self.board.dig(col, row)
+        self.check_win()
+        return True
 
-                # If a mine is uncovered, end the game and reveal all mines
-                if not safe:
-                    self.playing = False
-                    self.game_over = True
-                    self.reveal_all_mines()
+    def toggle_flag(self, col, row):
+        """Apply a flag change and keep the counter within the mine limit."""
+        tile = self.board.board_list[col][row]
+        if self.game_over or tile.revealed:
+            return False
 
-                self.check_win() # check if player has won the game
+        if tile.flagged:
+            tile.flagged = False
+            self.flags_placed -= 1
+            return True
 
-            # For a right click on a non-revealed flag, we must add or remove a flag
-            elif event.button == 3 and not tile.revealed:
+        if self.flags_placed >= self.num_mines:
+            return False
 
-                # If the tile is already flagged, we must remove it
-                if tile.flagged:
-                    tile.flagged = False 
-                    self.flags_placed -= 1
+        tile.flagged = True
+        self.flags_placed += 1
+        return True
 
-                # Otherwise, mark the tile as flagged
-                else:
-                    # Confirm that there are still flags left
-                    if self.flags_placed < self.num_mines:
-                        tile.flagged = True
-                        self.flags_placed += 1
+    def advance_ai(self):
+        """Perform at most one scheduled AI action through game logic."""
+        if self.game_over or not self.playing or self.ai_paused:
+            return
+        if self.ai_mode is AIMode.HUMAN_ONLY:
+            return
+        if self.ai_mode is AIMode.INTERACTIVE and not self.ai_turn:
+            return
+
+        now = pygame.time.get_ticks()
+        if self.ai_mode is AIMode.AUTOMATIC and now < self.next_ai_step:
+            return
+
+        self.next_ai_step = now + AI_STEP_DELAY_MS
+        observation = observation_from_board(self.board)
+        action = self.solver.next_action(
+            observation,
+            can_flag=self.flags_placed < self.num_mines,
+        )
+
+        if action is None:
+            self.ai_paused = True
+            self.ai_turn = False
+            return
+
+        if action.action_type is ActionType.REVEAL:
+            self.reveal_cell(action.col, action.row)
+        else:
+            self.toggle_flag(action.col, action.row)
+
+        if self.ai_mode is AIMode.INTERACTIVE and self.playing:
+            self.ai_turn = False
 
     """REVEAL ALL MINES FUNCTION"""
     def reveal_all_mines(self):
@@ -290,7 +361,13 @@ class Game:
             status_msg = "Game Over (Click to Restart)"
 
         else:
-            status_msg = "Playing"
+            if self.ai_mode is AIMode.INTERACTIVE:
+                turn_status = "AI turn" if self.ai_turn else "Your turn"
+                status_msg = f"{self.difficulty.value.title()}: {turn_status}"
+            elif self.ai_mode is AIMode.AUTOMATIC:
+                status_msg = f"Auto: {self.difficulty.value.title()}"
+            else:
+                status_msg = "Playing"
 
 
         # HUD TEXT
@@ -354,9 +431,40 @@ if __name__ == "__main__":
     the Game object using that mine count and calls game.run() to start Minesweeper. 
     """
 
-    # This is where the Minesweeper program starts. 
-    # It will prompt the user for the number of mines and then start the game loop.
+    # This is where the Minesweeper program starts.
     print("=== EECS 581: Minesweeper ===")
+
+    mode_choices = {
+        "1": AIMode.HUMAN_ONLY,
+        "2": AIMode.INTERACTIVE,
+        "3": AIMode.AUTOMATIC,
+    }
+    print("1) Player only")
+    print("2) Player and AI (take turns)")
+    print("3) AI automatic play")
+    while True:
+        mode_choice = input("Choose a mode (1-3): ").strip()
+        if mode_choice in mode_choices:
+            ai_mode = mode_choices[mode_choice]
+            break
+        print("Please enter 1, 2, or 3.")
+
+    difficulty = Difficulty.EASY
+    if ai_mode is not AIMode.HUMAN_ONLY:
+        difficulty_choices = {
+            "1": Difficulty.EASY,
+            "2": Difficulty.MEDIUM,
+            "3": Difficulty.HARD,
+        }
+        print("1) Easy: random covered cell")
+        print("2) Medium: direct clue deductions, otherwise random")
+        print("3) Hard: Medium plus a constrained 1-2-1 rule")
+        while True:
+            difficulty_choice = input("Choose AI difficulty (1-3): ").strip()
+            if difficulty_choice in difficulty_choices:
+                difficulty = difficulty_choices[difficulty_choice]
+                break
+            print("Please enter 1, 2, or 3.")
     
     # Keep asking until the player enters a valid number of mines between 10 and 20.
     while True:
@@ -378,7 +486,7 @@ if __name__ == "__main__":
             print("Invalid input, must be an integer.")
 
     # Create the game using the players selected number of mines.
-    game = Game(num)
+    game = Game(num, ai_mode=ai_mode, difficulty=difficulty)
 
     # Start running the Minesweeper game loop.
     game.run()
