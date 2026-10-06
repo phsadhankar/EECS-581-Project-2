@@ -75,7 +75,7 @@ class Game:
         An interactive Pygame Minesweeper game.
     """
 
-    def __init__(self, num_mines, num_hints):
+    def __init__(self, num_mines, num_hints, difficulty):
         """
         Initializes the Minesweeper game and the Pygame components.
 
@@ -103,7 +103,7 @@ class Game:
         self.win = False
         self.winner = None # None, 'player', or 'ai'
         self.player_moved = False # set when the player acts, cleared by the AI
-        self.ai = MinesweeperAI()
+        self.ai = MinesweeperAI(difficulty)
         self.hints = num_hints
 
     def run(self):
@@ -403,7 +403,7 @@ class Game:
             status_msg = "Game Over (Click to Restart)"
 
         else:
-            status_msg = "Playing | AI: Random Guesser"
+            status_msg = "Playing | AI: " + str(difficulty)
 
 
         # HUD TEXT
@@ -525,9 +525,30 @@ if __name__ == "__main__":
         except ValueError:
             print("Invalid input, must be an integer.")
 
+    while True:
+
+        print("Pick AI difficulty:")
+        print("1. Easy")
+        print("2. Medium")
+        print("3. Hard")
+
+        difficulty = input("Enter difficulty (1-3): ")
+
+        match difficulty:
+            case "1":
+                difficulty = "Easy"
+                break
+            case "2":
+                difficulty = "Medium"
+                break
+            case "3":
+                difficulty = "Hard"
+                break
+            case _:
+                print("Not a valid difficulty! Try again")
 
     # Create the game using the players selected number of mines.
-    game = Game(num, hints_num)
+    game = Game(num, hints_num, difficulty)
 
     # Start running the Minesweeper game loop.
     game.run()
