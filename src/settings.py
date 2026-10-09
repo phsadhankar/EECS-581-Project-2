@@ -52,4 +52,4 @@ NUM_COLORS = {
 
 # AI configuration
 AI_AUTO_PLAY_ENABLED = True    # if True, the opponent takes a turn after the player
-AI_MOVE_DELAY_MS = 100         # pause between opponent moves so they can be followed
+AI_MOVE_DELAY_MS = 850         # pause between opponent moves so they can be followed
