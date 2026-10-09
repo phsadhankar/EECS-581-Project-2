@@ -70,9 +70,10 @@ class Game:
         - first_click: Indicates whether the game is waiting for the first click.
         - game_over: Indicates whether the game has ended.
         - win: Indicates if the player has won the game.
+        - auto_solve: Indicates whether the AI controls every turn.
 
     Outputs:
-        An interactive Pygame Minesweeper game.
+        An interactive or fully AI-operated Pygame Minesweeper game.
     """
 
     def __init__(self, num_mines, num_hints, difficulty):
@@ -95,16 +96,18 @@ class Game:
 
         # Combined: Initialize the member variables
         self.num_mines = num_mines
+        self.num_hints = num_hints
         self.flags_placed = 0
         self.board = None
         self.playing = False
         self.first_click = True
         self.game_over = False
         self.win = False
-        self.winner = None # None, 'player', or 'ai'
+        self.winner = None # None, 'player', 'ai', 'ai_lost', or 'stalled'
         self.player_moved = False # set when the player acts, cleared by the AI
+        self.auto_solve = False
         self.ai = MinesweeperAI(difficulty)
-        self.hints = num_hints
+        self.hints = self.num_hints
 
     def run(self):
         """
@@ -130,10 +133,13 @@ class Game:
             self.winner = None
             self.player_moved = False
             self.flags_placed = 0
+            self.hints = self.num_hints
 
             # The main gameplay loop that keeps the game running while the player is still in progress
             while self.playing:
                 self.events() # process inputs and game events
+                if self.auto_solve and self.playing:
+                    self.play_ai_turn()
                 self.draw() # update the display of the game
                 self.clock.tick(FPS) # Combined: syntax to control the game loop speed necessary
 
@@ -169,8 +175,18 @@ class Game:
             if event.type != pygame.MOUSEBUTTONDOWN:
                 continue
 
-            if event.button == 1 and self.hint_box.collidepoint(event.pos):
+            mode_box = getattr(self, "mode_box", None)
+            if event.button == 1 and mode_box is not None and mode_box.collidepoint(event.pos):
+                self.auto_solve = not self.auto_solve
+                continue
+
+            if self.auto_solve:
+                continue
+
+            hint_box = getattr(self, "hint_box", None)
+            if event.button == 1 and hint_box is not None and hint_box.collidepoint(event.pos):
                 self.hint()
+                continue
 
             mouse_x, mouse_y = pygame.mouse.get_pos() # get the mouse position in pixels
 
@@ -187,8 +203,8 @@ class Game:
 
             tile = self.board.board_list[col][row] # get the tile clicked
 
-            # Reveal the tile with a left click on a non-flagged tile
-            if event.button == 1 and not tile.flagged:
+            # Reveal only covered, non-flagged tiles with a left click
+            if event.button == 1 and not tile.flagged and not tile.revealed:
 
                 # Set up the mines after the first click
                 if self.first_click:
@@ -218,26 +234,24 @@ class Game:
 
             # For a right click on a non-revealed flag, we must add or remove a flag
             elif event.button == 3 and not tile.revealed:
+                self.flags_placed = self.count_flags()
 
                 # If the tile is already flagged, we must remove it
                 if tile.flagged:
                     tile.flagged = False
-                    self.flags_placed -= 1
+                    self.flags_placed = self.count_flags()
+                    self.player_moved = True
 
                 # Otherwise, mark the tile as flagged
-                else:
-                    # Confirm that there are still flags left
-                    if self.flags_placed < self.num_mines:
-                        tile.flagged = True
-                        self.flags_placed += 1
-
-                # Record that the player moved so the opponent replies once.
-                self.player_moved = True
+                elif self.count_flags() < self.num_mines:
+                    tile.flagged = True
+                    self.flags_placed = self.count_flags()
+                    self.player_moved = True
 
         # The opponent replies once, and only once, after the player has moved.
         # events() runs every frame, so without this check the opponent would
         # keep playing on its own and finish the board by itself.
-        if AI_AUTO_PLAY_ENABLED and self.playing and self.player_moved:
+        if not self.auto_solve and AI_AUTO_PLAY_ENABLED and self.playing and self.player_moved:
             self.player_moved = False
             self.play_ai_turn()
 
@@ -261,6 +275,7 @@ class Game:
                 self.check_win()
                 # decrement player hints by one
                 self.hints -= 1
+                self.player_moved = True
                 return
 
             # set up a list of potential safe tiles
@@ -283,17 +298,38 @@ class Game:
                 self.board.dig(tile_col, tile_row)
                 # check if player won
                 self.check_win()
-
-            # decrement player hints by one
-            self.hints -= 1
+                # A hint is a player action, so the opponent can respond.
+                self.hints -= 1
+                self.player_moved = True
 
     """AI TURN FUNCTION"""
     def play_ai_turn(self):
+        moves = self.ai.take_turn(self.board)
+        if not moves:
+            if self.auto_solve:
+                self.playing = False
+                self.game_over = True
+                self.winner = 'stalled'
+            return
 
-        for col, row, action in self.ai.take_turn(self.board):
+        for col, row, action in moves:
+
+            tile = self.board.board_list[col][row]
+            self.flags_placed = self.count_flags()
+            if action == 'FLAG' and not tile.revealed and not tile.flagged and self.flags_placed >= self.num_mines:
+                if self.auto_solve:
+                    self.playing = False
+                    self.game_over = True
+                    self.winner = 'stalled'
+                return
 
             # Pause first so the player can see the board the move was chosen on.
             pygame.time.wait(AI_MOVE_DELAY_MS)
+
+            if self.first_click and action == 'REVEAL':
+                self.board.place_mines(col, row, self.num_mines)
+                self.board.place_clues()
+                self.first_click = False
 
             # The board reports False when the move uncovers a mine.
             safe = self.board.execute_ai_action(col, row, action)
@@ -304,7 +340,7 @@ class Game:
             if not safe:
                 self.playing = False
                 self.game_over = True
-                self.winner = 'player'
+                self.winner = 'ai_lost' if self.auto_solve else 'player'
                 self.reveal_all_mines()
                 return
 
@@ -399,11 +435,20 @@ class Game:
         elif self.winner == 'ai':
             status_msg = "AI Wins! (Click to Restart)"
 
+        elif self.winner == 'ai_lost':
+            status_msg = "Full AI hit a mine (Click to Restart)"
+
+        elif self.winner == 'stalled':
+            status_msg = "Full AI is stuck (Click to Restart)"
+
         elif self.game_over:
             status_msg = "Game Over (Click to Restart)"
 
+        elif self.auto_solve:
+            status_msg = f"Full AI solving | AI: {self.ai.difficulty}"
+
         else:
-            status_msg = "Playing | AI: " + str(difficulty)
+            status_msg = f"Playing | AI: {self.ai.difficulty}"
 
 
         # HUD TEXT
@@ -445,6 +490,15 @@ class Game:
         text_rect = hint_text.get_rect(center=self.hint_box.center)
         self.screen.blit(hint_text, text_rect)
 
+        self.mode_box = pygame.Rect(110, MARGIN_TOP + (ROWS * TILESIZE) + 2, 200, 24)
+        mode_color = (160, 210, 160) if self.auto_solve else (200, 200, 200)
+        pygame.draw.rect(self.screen, mode_color, self.mode_box, border_radius=3)
+        pygame.draw.rect(self.screen, GRID_COLOR, self.mode_box, width=2, border_radius=3)
+        mode_label = "Mode: Full AI" if self.auto_solve else "Mode: Human vs AI"
+        mode_text = self.font.render(mode_label, True, TEXT_COLOR)
+        mode_text_rect = mode_text.get_rect(center=self.mode_box.center)
+        self.screen.blit(mode_text, mode_text_rect)
+
         pygame.display.flip()
 
     def end_screen(self):
@@ -467,6 +521,9 @@ class Game:
 
             # If the player clicks the mouse, leave the game over state and start a new round.
             if event.type == pygame.MOUSEBUTTONDOWN:
+                mode_box = getattr(self, "mode_box", None)
+                if event.button == 1 and mode_box is not None and mode_box.collidepoint(event.pos):
+                    self.auto_solve = not self.auto_solve
                 self.game_over = False  # Break out to start a new round
 
     # Keep displaying the finished baord while the game is over.
