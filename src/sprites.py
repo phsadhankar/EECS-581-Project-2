@@ -86,6 +86,7 @@ class Board:
 
         # Track tiles already visited during recursion
         self.dug = set()
+        self.max_flags = None
 
     def place_mines(self, safe_x, safe_y, num_mines):
         """
@@ -98,6 +99,8 @@ class Board:
         Creation date: September 16, 2026
         Source: Original.
         """
+        self.max_flags = num_mines
+
         # Make the first clicked tile and the eight tiles around it safe.
         safe_zone = set()
         for dx in (-1, 0, 1):
@@ -254,6 +257,12 @@ class Board:
                 pygame.draw.rect(surface, GRID_COLOR, rect, 1)
 
     def get_unrevealed_cells(self):
+        """
+        Function: Board.get_unrevealed_cells
+        Description: Collects covered cells that do not already have flags.
+        Inputs: None.
+        Outputs: A list of (x, y) coordinates available for an AI guess.
+        """
         cells = []
         for x in range(COLS):
             for y in range(ROWS):
@@ -263,6 +272,12 @@ class Board:
         return cells
 
     def execute_ai_action(self, x, y, action_type):
+        """
+        Function: Board.execute_ai_action
+        Description: Applies a flag or reveal selected by the AI.
+        Inputs: x and y coordinates and an action type ('FLAG' or 'REVEAL').
+        Outputs: True for a safe or ignored action; False for an invalid action or a mine reveal.
+        """
         # Reject any coordinate that is off the board.
         if not (0 <= x < COLS and 0 <= y < ROWS):
             return False
@@ -270,6 +285,17 @@ class Board:
         tile = self.board_list[x][y]
 
         if action_type == 'FLAG':
+            if tile.revealed or tile.flagged:
+                return True
+
+            if self.max_flags is not None:
+                flags_placed = sum(
+                    candidate.flagged
+                    for column in self.board_list
+                    for candidate in column
+                )
+                if flags_placed >= self.max_flags:
+                    return True
 
             # Set the flag instead of toggling it, because the computer only
             # ever flags cells that its rules have proven are mines.
