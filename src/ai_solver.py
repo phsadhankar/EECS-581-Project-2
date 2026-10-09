@@ -40,7 +40,7 @@ class MinesweeperAI:
         return [move] if move is not None else []
 
 
-    def helper_121(self, board, pos_1, pos_2, pos_3):
+    def helper_121(self, board, pos_1, pos_2, pos_3, clue_positions):
 
         x1,y1 = pos_1
         x2,y2 = pos_2
@@ -60,6 +60,46 @@ class MinesweeperAI:
 
         if cell2.flagged:
             return None
+
+        candidate_positions = (pos_1, pos_2, pos_3)
+        pattern_mines = (1, 0, 1)
+        expected_clues = (1, 2, 1)
+
+        for clue_index, (clue_x, clue_y) in enumerate(clue_positions):
+            clue = board.board_list[clue_x][clue_y]
+            if not clue.revealed or clue.type != "C" or clue.clue_num != expected_clues[clue_index]:
+                return None
+
+            candidate_neighbors = {
+                position
+                for position in candidate_positions
+                if max(abs(position[0] - clue_x), abs(position[1] - clue_y)) == 1
+            }
+            hidden_neighbors = set()
+            flagged_neighbors = 0
+
+            for neighbor_x in range(max(0, clue_x - 1), min(len(board.board_list) - 1, clue_x + 1) + 1):
+                for neighbor_y in range(max(0, clue_y - 1), min(len(board.board_list[neighbor_x]) - 1, clue_y + 1) + 1):
+                    if (neighbor_x, neighbor_y) == (clue_x, clue_y):
+                        continue
+
+                    neighbor = board.board_list[neighbor_x][neighbor_y]
+                    if neighbor.flagged:
+                        flagged_neighbors += 1
+                    elif not neighbor.revealed:
+                        hidden_neighbors.add((neighbor_x, neighbor_y))
+
+            if not hidden_neighbors.issubset(candidate_neighbors):
+                return None
+
+            expected_remaining_mines = sum(
+                pattern_mines[index]
+                for index, position in enumerate(candidate_positions)
+                if position in candidate_neighbors
+                and not board.board_list[position[0]][position[1]].flagged
+            )
+            if clue.clue_num - flagged_neighbors != expected_remaining_mines:
+                return None
 
         if not cell1.flagged:
             return(x1, y1, FLAG)
@@ -96,14 +136,26 @@ class MinesweeperAI:
                 print("Horizontal Found at: ", col, row)
                 # Check Above
                 if row > 0:
-                    move = self.helper_121(board, (col, row-1), (col+1, row-1), (col+2, row-1))
+                    move = self.helper_121(
+                        board,
+                        (col, row - 1),
+                        (col + 1, row - 1),
+                        (col + 2, row - 1),
+                        ((col, row), (col + 1, row), (col + 2, row)),
+                    )
 
                     if move is not None:
                         return move
 
                 # Check Below
                 if row < rows - 1:
-                    move = self.helper_121(board, (col, row+1), (col+1, row+1), (col+2, row+1))
+                    move = self.helper_121(
+                        board,
+                        (col, row + 1),
+                        (col + 1, row + 1),
+                        (col + 2, row + 1),
+                        ((col, row), (col + 1, row), (col + 2, row)),
+                    )
                     
                     if move is not None:
                         return move
@@ -128,13 +180,25 @@ class MinesweeperAI:
                 print("Vertical Found at: ", col, row)
 
                 if col > 0:
-                    move = self.helper_121(board, (col-1, row), (col-1, row+1), (col-1, row+2))
+                    move = self.helper_121(
+                        board,
+                        (col - 1, row),
+                        (col - 1, row + 1),
+                        (col - 1, row + 2),
+                        ((col, row), (col, row + 1), (col, row + 2)),
+                    )
                     
                     if move is not None:
                         return move
 
                 if col < cols - 1:
-                    move = self.helper_121(board, (col+1, row), (col+1, row+1), (col+1, row+2))
+                    move = self.helper_121(
+                        board,
+                        (col + 1, row),
+                        (col + 1, row + 1),
+                        (col + 1, row + 2),
+                        ((col, row), (col, row + 1), (col, row + 2)),
+                    )
                                         
                     if move is not None:
                         return move
