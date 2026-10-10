@@ -8,7 +8,7 @@ Time spent attending EECS 581 lectures is not included.
 |:----:|:--------:|:-----:|
 | 09/24/2026 | Attended GTA team meeting and discussed project 2 planning | 0.33 |
 | 09/26/2026 | Attended virtual team meeting and project requirements and task assignments | 0.50 |
-| 10/01/2026 | Attended GTAtTeam meeting and discussed project progress | 0.33 |
+| 10/01/2026 | Attended GTA Team meeting and discussed project progress | 0.33 |
 | 10/09/2026 | Did tons of edge-case testing, did bug fixes, and built Full AI mode | 3.50 |
 
 **TOTAL HOURS: 4.66**
