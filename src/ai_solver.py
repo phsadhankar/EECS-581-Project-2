@@ -39,27 +39,28 @@ class MinesweeperAI:
 
         return [move] if move is not None else []
 
-
+    """HELPER FUNCTION FOR move_121()"""
     def helper_121(self, board, pos_1, pos_2, pos_3, clue_positions):
 
+        # Get the x and y cord for each given cell
         x1,y1 = pos_1
         x2,y2 = pos_2
         x3,y3 = pos_3
 
-        print("Testing: ")
-        print(pos_1)
-        print(pos_2)
-        print(pos_3)
-
+        # Get the actual cell from the cords
         cell1 = board.board_list[x1][y1]
         cell2 = board.board_list[x2][y2]
         cell3 = board.board_list[x3][y3]
 
+        # Make sure none of them are revealed
         if cell1.revealed or cell2.revealed or cell3.revealed:
             return None
 
+        # Make sure the middle cell isn't flagged
         if cell2.flagged:
             return None
+
+        # Clue Handling
 
         candidate_positions = (pos_1, pos_2, pos_3)
         pattern_mines = (1, 0, 1)
@@ -101,6 +102,8 @@ class MinesweeperAI:
             if clue.clue_num - flagged_neighbors != expected_remaining_mines:
                 return None
 
+        # Logic to complete the 121 pattern
+        # If a part of it is already complete do the next step
         if not cell1.flagged:
             return(x1, y1, FLAG)
 
@@ -109,8 +112,11 @@ class MinesweeperAI:
 
         return (x2, y2, REVEAL)
 
+    """121 FUNCTION"""
     def move_121(self, board):
 
+        # Variable Setup
+        # Get rows and cols
         cols = len(board.board_list)
         rows = len(board.board_list[0])
 
@@ -120,10 +126,12 @@ class MinesweeperAI:
         for col in range(cols - 2):
             for row in range(rows):
 
+                # Get the three cells we are testing
                 start = board.board_list[col][row]
                 down1 = board.board_list[col + 1][row]
                 down2 = board.board_list[col + 2][row]
 
+                # Check if they are a valid 121 pattern. Make sure they aare revealed and numbered cells 
                 if not (start.revealed and down1.revealed and down2.revealed):
                     continue
 
@@ -133,7 +141,7 @@ class MinesweeperAI:
                 if not (start.clue_num == 1 and down1.clue_num == 2 and down2.clue_num == 1):
                     continue
 
-                print("Horizontal Found at: ", col, row)
+                
                 # Check Above
                 if row > 0:
                     move = self.helper_121(
@@ -161,13 +169,18 @@ class MinesweeperAI:
                         return move
 
         # Check Vertical
+
         for col in range(cols):
             for row in range(rows - 2):
 
+                # Variable Setup
+                # Get rows and cols
                 start = board.board_list[col][row]
                 down1 = board.board_list[col][row + 1]
                 down2 = board.board_list[col][row + 2]
-                
+
+                # Check if they are a valid 121 pattern. Make sure they aare revealed and numbered cells 
+
                 if not (start.revealed and down1.revealed and down2.revealed):
                     continue
                 
@@ -177,8 +190,8 @@ class MinesweeperAI:
                 if not (start.clue_num == 1 and down1.clue_num == 2 and down2.clue_num == 1):
                     continue
 
-                print("Vertical Found at: ", col, row)
 
+                # Check Left
                 if col > 0:
                     move = self.helper_121(
                         board,
@@ -191,6 +204,7 @@ class MinesweeperAI:
                     if move is not None:
                         return move
 
+                # Check Right
                 if col < cols - 1:
                     move = self.helper_121(
                         board,
@@ -204,7 +218,8 @@ class MinesweeperAI:
                         return move
 
         return None
-                
+
+    """MEDIUM MOVE"""
     def medium_move(self, board):
         # go through ever revealed clue until one of the rules is used to make a move
         for i in range(len(board.board_list)):
@@ -259,29 +274,39 @@ class MinesweeperAI:
     """SINGLE BEST MOVE"""
     def solve(self, board):
 
+        # If difficulty is "Hard"
         if self.difficulty == "Hard":
+
+            # Start by looking for 121 patterns
             move = self.move_121(board)
+            # If move is not None, play the move
             if move is not None:
                 return move
 
+            # If it finds no 121 pattern default to medium move
             move = self.medium_move(board)
-                        
+            # If move is not None, play the move
             if move is not None:
                 return move
                         
-            
+            # If all else fails random guess
             return self.guess(board)
 
+        # If difficulty is "Medium"
         if self.difficulty == "Medium":
+            # Look for a medium Move
             move = self.medium_move(board)
 
+            # If move is not None, play the move
             if move is not None:
                 return move
 
+            # If all else fails fall back to random guess
             return self.guess(board)
         
-
+        # If diffiuclty is "Easy"
         if self.difficulty == "Easy":
+            # Just Random Guess
             return self.guess(board)
 
     """RANDOM GUESS"""
