@@ -47,12 +47,13 @@ Time spent attending EECS 581 lectures is not included.
 ## Carter Ruff
 | Date | Activity | Hours |
 |:----:|:--------:|:-----:|
+| 09/24/2026 | Attended GTA team meeting and discussed project 2 planning | 0.33 |
 | 10/5/2026 | Added preparation code for hard difficulty | 0.20 |
 | 10/8/2026 | Implemented hard difficulty logic | 1.00 |
 | 10/8/2026 | Attended GTA team meeting and discussed project 2 progress | 0.33 |
 | 10/10/2026 | Cleaned up hard difficulty code and added comments | 0.30 |
 
-**TOTAL HOURS: 1.83**
+**TOTAL HOURS: 2.16**
 
 ## Pruthviraj Sadhankar
 | Date | Activity | Hours |
