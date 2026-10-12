@@ -5,17 +5,19 @@
 </div>
 
 # Minesweeper
-**Version:** 1.1  
-**Date:** 09/28/2026  
-**Document Identifier:** MS-SAP2-1.1
+**Version:** 1.3  
+**Date:** 10/11/2026  
+**Document Identifier:** MS-SAP2-1.3
 
 # Software Architecture Document
-## Version 1.1
+## Version 1.3
 
 | Date | Version | Description | Author |
 |------|---------|-------------|--------|
 | 09/27/2026 | 1.0 | Initial creation of Project 2 Software Architecture Document | Ivan Kullaya |
 | 09/28/2026 | 1.1 | Expanded initial architecture draft based on inherited Group 18 implementation and current Easy AI implementation | Ivan Kullaya |
+| 10/10/2026 | 1.2 | Updated architecture to reflect final implementation and included Gael's UML Hint Feature Diagram | Ivan Kullaya |
+| 10/11/2026 | 1.2 | Final review of architecture documentation to fix minor errors after reviewing code | Ivan Kullaya |
 
 # Table of Contents
 
@@ -89,9 +91,7 @@ The inherited Project 1 system provides the following core functionality:
 - Restarting the game after a game has ended.
 - Display of game status and remaining flags through the Pygame interface.
 
-Project 2 extends the inherited system with three levels of AI behavior and a Hint System. At the current stage of development, the Easy AI has been integrated into the system. The Easy AI selects randomly from cells that have not already been revealed or flagged. Medium and Hard AI behavior and the Hint System will be documented further as their implementations are completed.
-
-(`AUTHORS NOTE TO FINISH SECTION WHEN CODE FINISHED`)
+Project 2 extends the inherited system with three levels of AI behavior and a Hint System. The current source code implements Easy, Medium, and Hard AI selection, alternating human/AI turns, a Full AI mode, and a player Hint System. At startup the user selects 10–20 mines, 0–3 hints, and an AI difficulty. The Easy AI guesses among eligible covered cells; Medium adds clue-based flag/reveal rules; Hard additionally attempts a constrained 1-2-1 pattern. The Hint System reveals a safe cell and is not called by the AI.
 
 ## 1.3 Definitions, Acronyms, and Abbreviations
 
@@ -121,13 +121,43 @@ Board-specific behavior is separated into sprites.py. The Board class maintains 
 
 Configuration values are stored separately in settings.py, including board dimensions, tile size, window dimensions, frame rate, interface colors, and AI configuration values.
 
-Project 2 additionally introduces ai_solver.py, which separates AI decision-making from the main game and board-management code. The current Easy AI implementation identifies valid covered cells and randomly selects one to reveal. The Game class coordinates when an AI turn occurs, while the Board class executes the AI's requested action.
-
-(`AUTHORS NOTE TO FINISH SECTION WHEN CODE FINISHED`)
+Project 2 additionally introduces ai_solver.py, which separates AI decision-making from the main game and board-management code. The AI implementation selects among Easy, Medium, and Hard strategies, with logical deductions and random fallback as applicable. The Game class coordinates when an AI turn occurs, while the Board class executes the AI's requested action.
 
 # 2. Architectural Representation
 
-(`AUTHORS NOTE TO FINISH SECTION WHEN CODE FINISHED`)
+The application is a modular, event-driven Python/Pygame program. main.py is the controller and UI layer; sprites.py owns the board model and drawing of tiles; ai_solver.py contains strategy decisions; settings.py defines configuration. Game owns one Board with exactly 100 Tile objects. Both human and AI actions modify this same board. Hints are implemented in Game, not in a separate module.
+
+```mermaid
+flowchart TD
+    User[Player / Console Startup] --> Game[Game: main.py / Pygame events and HUD]
+    Config[settings.py: constants] --> Game
+    Config --> Board[Board: sprites.py]
+    Game -->|owns and updates| Board
+    Board -->|contains 100| Tile[Tile: x, y, type, revealed, flagged, clue_num]
+    Game -->|take_turn board| AI[MinesweeperAI: ai_solver.py]
+    AI -->|reads current board| Board
+    AI -->|returns x y action| Game
+    Game -->|hint uses dig and mine setup| Board
+    Board -->|draw tiles| Display[Pygame display]
+    Game -->|draw HUD| Display
+```
+
+**Figure 1: High-level component architecture.** The arrows distinguish decision-making from board mutations. The AI reads board state and returns an action; Game.play_ai_turn() invokes Board.execute_ai_action().
+
+```mermaid
+flowchart LR
+    Event[Mouse input or automatic turn] --> Controller[Game.events / Game.run]
+    Controller --> Mode{Human vs AI or Full AI?}
+    Mode -->|Human| Human[Reveal / Flag / Hint]
+    Mode -->|Full AI| Solver[AI solve]
+    Human --> Board[Board / Tile state]
+    Human -->|player moved| Solver
+    Solver -->|FLAG or REVEAL| Board
+    Board --> Result[Check winner or mine loss]
+    Result --> Render[Draw board and HUD]
+```
+
+**Figure 2: Main interaction and data flow.** In Human vs AI mode a valid human action causes one opponent response when enabled. In Full AI mode Game.run() requests an AI move on each active frame, subject to the configured delay.
 
 # 3. Architectural Goals and Constraints
 
@@ -183,35 +213,62 @@ For Project 2, the architecture was extended with ai_solver.py to separate AI de
 
 This separation also supports the three required AI difficulty levels. Easy AI uses random selection, while Medium and Hard AI can add additional decision-making rules while continuing to interact with the same board and game components.
 
-The Hint System will also be integrated into the inherited architecture while minimizing changes to existing Project 1 behavior. Its final architectural design and interactions will be documented after the feature is completed.
-
-(`AUTHORS NOTE TO FINISH SECTION WHEN CODE FINISHED`)
+The Hint System is implemented as Game.hint() in main.py and uses the existing Board to reveal a safe cell. A mode toggle in the Pygame HUD selects Human vs AI or Full AI; the AI uses the same Board in either mode. The hint is a player action, not an AI strategy.
 
 # 4. Use-Case View
 
-(`AUTHORS NOTE TO FINISH SECTION WHEN CODE FINISHED AND COLLABORATE WITH GAEL FOR UML DIAGRAM`)
+The player chooses mine count (10–20), hint count (0–3), and AI difficulty (Easy, Medium, Hard) using console prompts. The player can reveal a tile, flag/unflag a tile, request a hint, toggle Full AI mode, and restart after a finished game. The AI opponent is an internal actor that performs flag or reveal actions on the same board.
+
+```mermaid
+flowchart TD
+    Player[Player] --> Start[Configure and start game]
+    Player --> Reveal[Reveal tile]
+    Player --> Flag[Place or remove flag]
+    Player --> Hint[Request limited hint]
+    Player --> Toggle[Toggle Full AI mode]
+    Player --> Restart[Restart completed game]
+    Reveal --> Board[Shared Board]
+    Flag --> Board
+    Hint --> Board
+    Toggle --> AI[AI Solver]
+    AI --> Board
+    Board --> Outcome[Win / Loss / Continue]
+```
+
+**Figure 3: Use-case overview.** This is an interaction overview rather than a strict UML use-case diagram; the separate custom-feature class UML is reproduced in Section 7.4.
 
 ## 4.1 Use-Case Realizations
+The console validates the selected mine count, hint count, and difficulty, then constructs Game(num_mines, num_hints, difficulty). Game.run() creates a fresh Board on each new round, resets the winner, flag count, first_click, player_moved, and remaining hints. Difficulty and mode persist across rounds unless the program is restarted or the mode button is toggled.
 
 ### Start or Reset Game
+A left-click is translated from screen pixels to (col, row). The event handler rejects out-of-board, flagged, and already-revealed tiles. On the first reveal, place_mines() excludes the selected cell and its adjacent cells, then place_clues() calculates numbers. Board.dig() reveals the tile, recursively expanding blank regions. The Game checks for a mine loss or victory.
 
 ### Uncover Cell
+A left-click is translated from screen pixels to (col, row). The event handler rejects out-of-board, flagged, and already-revealed tiles. On the first reveal, place_mines() excludes the selected cell and its adjacent cells, then place_clues() calculates numbers. Board.dig() reveals the tile, recursively expanding blank regions. The Game checks for a mine loss or victory.
 
 ### Place or Remove Flag
+A right-click on an unrevealed tile toggles Tile.flagged. The player cannot place more flags than the selected mine count. Game.count_flags() updates the HUD. Valid flag actions can trigger the AI opponent's next turn.
 
 ### Use AI Solver
+Game.play_ai_turn() calls MinesweeperAI.take_turn(board), which delegates to solve() and returns zero or one action as a list. Game passes each (col,row,action) to Board.execute_ai_action(), updates flag counts, and checks for loss or victory.
 
 ### Easy AI Turn
+guess() randomly chooses a cell returned by Board.get_unrevealed_cells() and returns a REVEAL action.
 
 ### Medium AI Turn
+medium_move() scans revealed clue tiles and classifies their neighboring cells as flagged or hidden. If hidden + flagged == clue, it flags a hidden neighbor; if flagged == clue, it reveals a hidden neighbor. It returns one action per turn. If no rule applies, solve() calls guess().
 
 ### Hard AI Turn
+solve() attempts move_121() first, then medium_move(), then guess(). move_121() scans horizontal and vertical revealed 1-2-1 clues and checks adjacent candidate cells through helper_121(). A qualifying pattern flags outer candidates and eventually reveals the center candidate.
 
 ### Request Hint
+In human-controlled mode, the player clicks Hint (n). If hints remain and this is the first action, Game.hint() randomly chooses a safe starting coordinate, places mines and clues around it, and reveals it. Otherwise it selects an unrevealed, unflagged, non-mine tile and reveals it. A successful hint consumes one use and counts as a player action.
 
 ### Victory
+Game.check_win() counts non-mine tiles that remain unrevealed. If none remain, it ends the game and records the supplied winner (`player` or `ai`).
 
 ### Loss
+Revealing a mine ends the game and exposes all mines. If the AI uncovers a mine in Human vs AI mode, the player is recorded as the winner; in Full AI mode the result is ai_lost. Full AI can also end in a stalled state if no action is available or a flag limit prevents an AI flag.
 
 # 5. Logical View
 
@@ -277,10 +334,8 @@ Responsible for:
 
 ### Hint System
 
-The location and organization of the Hint System will be documented after its final implementation is integrated into the inherited
-system.
-
-(`AUTHORS NOTE TO FINISH SECTION WHEN CODE FINISHED`)
+- The Hint System is implemented in Game.hint() within main.py, using the same Board and Tile objects as player and AI actions.
+- The HUD displays a clickable Hint (n) button.
 
 ## 5.2 Architecturally Significant Components
 
@@ -312,15 +367,15 @@ Project 2 additionally tracks whether the player has performed an action requiri
 
 AI decision-making is separated into the MinesweeperAI class in ai_solver.py.
 
-The AI receives the current Board and determines an action. The current Easy AI selects randomly among valid covered and unflagged cells.
+The AI receives the current Board and determines an action. Easy AI selects randomly among valid covered and unflagged cells; Medium evaluates neighboring clues; Hard checks 1-2-1 patterns before the Medium rules.
 
-The same AI component will be extended with the logical rules required by Medium and Hard difficulty without requiring the core Board representation to be replaced.
+The same AI class already implements Medium and Hard behavior in medium_move(), move_121(), and helper_121(), without replacing the Board representation.
 
 ### Hint System
 
 The Hint System will provide limited assistance by selecting a covered safe tile and revealing it for the player.
 
-(`AUTHORS NOTE TO FINISH SECTION WHEN CODE FINISHED`)
+The Hint System is implemented in Game.hint(). On a first-action hint it initializes mines and clues around a randomly chosen safe coordinate, reveals that tile, and consumes one hint. Later hints randomly select a covered, unflagged, non-mine tile. It uses Board.dig(), checks victory, decrements the remaining count, and marks player_moved so the opponent can respond.
 
 ### Win/Loss Management
 
@@ -346,9 +401,7 @@ settings.py provides shared configuration values used by the other components. T
 
 The Board and Game display their current state through Pygame. As Tile and game-state values change, subsequent screen updates reflect those changes.
 
-The final relationship between the Hint System and these components will be documented after the feature has been implemented.
-
-(`AUTHORS NOTE TO FINISH SECTION WHEN CODE FINISHED`)
+Game.hint() directly examines Board.board_list and calls Board.place_mines(), Board.place_clues(), and Board.dig(). The AI does not call the hint feature. The game redraws the hint count in the Pygame HUD.
 
 # 6. AI Solver Architecture
 
@@ -400,11 +453,10 @@ If neither rule produces a valid action, the AI performs the same random selecti
 ### Relevant Functions/Classes
 
 | Function/Class | Purpose |
-|---|---|
-| `[NAME]` | [DESCRIPTION] |
-| `[NAME]` | [DESCRIPTION] |
-
-(`AUTHORS NOTE TO FINISH SECTION WHEN CODE FINISHED`)
+|:---:|:---:|
+| medium_move(board) | Inspect revealed clues and return a single logical action or None. |
+| solve(board) | Route Medium difficulty to medium_move(), then guess(). |
+| guess(board) | Choose a random unflagged, unrevealed tile when no deduction exists. |
 
 ## 6.3 Hard AI
 
@@ -425,14 +477,14 @@ The Hard AI extends Medium AI behavior by recognizing the required 1-2-1 Mineswe
 
 | Function/Class | Purpose |
 |:---::---:|
-| `[NAME]` | [DESCRIPTION] |
-| `[NAME]` | [DESCRIPTION] |
-
-(`AUTHORS NOTE TO FINISH SECTION WHEN CODE FINISHED`)
+| move_121(board) | Find horizontal/vertical 1-2-1 clue patterns and try candidate orientations. |
+| helper_121(board, pos_1, pos_2, pos_3, clue_positions) | Validate candidate pattern and return one flag/reveal action. |
+| medium_move(board) | Apply standard clue deductions when no 1-2-1 action is found. |
+| guess(board) | Random fallback if neither logic stage yields an action. |
 
 # 7. Hint System Architecture
 
-## 7.1 Purpose
+## Purpose
 
 The Hint System provides limited assistance to the player during a Minesweeper game.
 
@@ -440,7 +492,7 @@ When the player requests a hint, the system identifies a covered cell that does 
 
 The number of hints available during a game is limited so that the feature provides assistance without removing the challenge of the game.
 
-## 7.2 Behavior
+## Behavior
 
 1. The player requests a hint.
 2. The system determines whether any hints remain.
@@ -451,20 +503,22 @@ The number of hints available during a game is limited so that the feature provi
 7. The remaining hint count is decreased.
 8. The interface is updated.
 
-(`AUTHORS NOTE TO FINISH SECTION WHEN CODE FINISHED`)
-
-## 7.3 Relevant Functions/Classes
+## Relevant Functions/Classes
 
 | Function/Class | Purpose |
 |:---:|:---:|
-| `[NAME]` | [DESCRIPTION] |
-| `[NAME]` | [DESCRIPTION] |
+| Game.hint() | Select and reveal a safe tile, consume a hint, and record the player's move. |
+| Game.events() | Detect clicks on the hint button and block them during Full AI mode. |
+| Board.place_mines() / place_clues() | Initialize the board if a hint is the first action. |
+| Board.dig() | Reveal the selected safe tile and recursively expand blanks. |
+| Game.check_win() | Detect victory after a hint. |
+| Game.draw() | Draw the Hint (n) button and remaining count. |
 
-(`AUTHORS NOTE TO FINISH SECTION WHEN CODE FINISHED`)
+## UML Diagram
 
-## 7.4 UML Diagram
+![Gael's Hint System UML class diagram](hint_system_uml.png)
 
-(`AUTHORS NOTE TO FINISH SECTION WHEN CODE FINISHED AND COLLABORATE WITH GAEL FOR UML DIAGRAM`)
+**Figure 4: Custom Hint System UML diagram supplied by the team.** Game owns one Board, and Board contains 100 Tile objects. The diagram documents Game.hint() and the first-action / later-action rules.
 
 # 8. Data Flow
 
@@ -478,7 +532,24 @@ On the first valid reveal, the Board places mines while excluding the safe regio
 
 Board.dig() processes the selected tile. Empty tiles may cause neighboring cells to be recursively uncovered. After the reveal, the Game checks for a loss or victory and updates the display.
 
-(`AUTHORS NOTE TO FINISH SECTION WHEN CODE FINISHED`)
+```mermaid
+flowchart TD
+    A[Player left-click] --> B[Game.events converts pixels to grid coordinates]
+    B --> C{Covered and not flagged?}
+    C -->|No| X[Ignore]
+    C -->|Yes| D{First click?}
+    D -->|Yes| E[Board.place_mines around safe coordinate]
+    E --> F[Board.place_clues]
+    F --> G[Board.dig]
+    D -->|No| G
+    G --> H{Mine uncovered?}
+    H -->|Yes| I[End game and reveal all mines]
+    H -->|No| J[Mark player_moved and check_win]
+    J --> K[Optional AI response]
+    K --> L[Draw HUD and Board]
+```
+
+**Figure 5: Player reveal data flow.** Empty-tile reveals recursively expand to adjacent tiles through Board.dig() and its dug set.
 
 ## 8.2 Flag Data Flow
 
@@ -488,7 +559,22 @@ If the cell is currently unflagged and additional flags are available, its flagg
 
 The Game recounts the number of flags currently placed and the Board's next display update reflects the new Tile state.
 
-(`AUTHORS NOTE TO FINISH SECTION WHEN CODE FINISHED`)
+```mermaid
+flowchart TD
+    A[Player right-click] --> B{Valid covered tile?}
+    B -->|No| X[Ignore]
+    B -->|Yes| C{Already flagged?}
+    C -->|Yes| D[Remove flag]
+    C -->|No| E{Flag count below mine count?}
+    E -->|Yes| F[Place flag]
+    E -->|No| X
+    D --> G[Game.count_flags]
+    F --> G
+    G --> H[Mark player_moved]
+    H --> I[Optional AI response and redraw]
+```
+
+**Figure 6: Player flag data flow.** The flag state is stored on each Tile, not in a separate flag grid.
 
 ## 8.3 AI Solver Data Flow
 
@@ -500,7 +586,26 @@ Easy AI selects randomly among eligible cells. Medium AI will first attempt its 
 
 The resulting action is sent to Board.execute_ai_action(), which modifies the Board. The Game then updates flag counts if necessary and checks the resulting win/loss state.
 
-(`AUTHORS NOTE TO FINISH SECTION WHEN CODE FINISHED`)
+```mermaid
+flowchart TD
+    A[AI turn requested by Game] --> B[MinesweeperAI.take_turn]
+    B --> C{Difficulty}
+    C -->|Easy| G[guess]
+    C -->|Medium| M[medium_move]
+    C -->|Hard| H[move_121]
+    H -->|No action| M
+    H -->|Action| Q[Return action tuple]
+    M -->|No action| G
+    M -->|Action| Q
+    G -->|Eligible random cell| Q
+    G -->|No candidate| Z[No action]
+    Q --> D[Game.play_ai_turn]
+    D --> E[Board.execute_ai_action]
+    E --> F[Update flags / winner / mine loss]
+    F --> R[Draw updated board]
+```
+
+**Figure 7: AI data flow.** A returned move is a three-element tuple (col, row, 'FLAG' or 'REVEAL'); take_turn() wraps it as a one-element list. Human vs AI requests a response after valid player actions; Full AI requests a turn each active frame. AI_MOVE_DELAY_MS slows the execution of each action.
 
 ## 8.4 Hint System Data Flow
 
@@ -508,7 +613,25 @@ The Hint System data flow begins when the player requests a hint. The system ver
 
 A safe cell is selected and revealed, the remaining hint count is reduced, and the new state is displayed.
 
-(`AUTHORS NOTE TO FINISH SECTION WHEN CODE FINISHED`)
+```mermaid
+flowchart TD
+    A[Player clicks Hint button] --> B{Hints remaining?}
+    B -->|No| Z[No action]
+    B -->|Yes| C{First action?}
+    C -->|Yes| D[Pick random safe starting coordinate]
+    D --> E[Place mines excluding safe region and calculate clues]
+    E --> F[Board.dig]
+    C -->|No| G[Collect covered unflagged non-mine tiles]
+    G --> H{Any eligible tile?}
+    H -->|No| Z
+    H -->|Yes| I[Choose random safe tile]
+    I --> F
+    F --> J[Check win and decrement hints]
+    J --> K[Mark player_moved]
+    K --> L[HUD redraw / optional AI opponent response]
+```
+
+**Figure 8: Hint data flow.** The Hint System is independent of MinesweeperAI; it modifies the same Board using Board.dig().
 
 ## 8.5 Game Reset Data Flow
 
@@ -518,7 +641,19 @@ The reset process clears the previous board, mines, revealed states, flags, game
 
 The new game then waits for the player's first valid reveal before placing mines.
 
-(`AUTHORS NOTE TO FINISH SECTION WHEN CODE FINISHED`)
+```mermaid
+flowchart TD
+    A[Game-over screen receives mouse click] --> B[Exit game-over loop]
+    B --> C[Game.run creates new Board]
+    C --> D[Reset playing first_click game_over win winner]
+    D --> E[Reset flags_placed and player_moved]
+    E --> F[Restore hints from num_hints]
+    F --> G[Keep selected AI difficulty and current mode]
+    G --> H[Draw covered 10x10 board]
+    H --> I[Wait for first player or AI reveal]
+```
+
+**Figure 9: Reset data flow.** Mine locations are not reused because a new Board is created each round.
 
 # 9. Key Data Structures
 
@@ -561,15 +696,61 @@ Board.get_unrevealed_cells() creates a temporary list of coordinates representin
 
 An AI action contains an x-coordinate, y-coordinate, and action type. The current Easy AI returns a REVEAL action. The Board's AI-action interface also supports FLAG, allowing Medium and Hard AI strategies to perform logical flagging.
 
-(`AUTHORS NOTE TO FINISH SECTION WHEN CODE FINISHED`)
-
 ## 9.3 Relationship Between Data Structures
 
 The Board owns the collection of Tile objects representing the current game. Each Tile stores its own mine/clue type, reveal state, flag state, and clue number.
 
 The Game owns the Board and maintains information about the overall game state. The AI reads the Board when selecting an action but does not currently maintain an independent copy of the board.
 
-(`AUTHORS NOTE TO FINISH SECTION WHEN CODE FINISHED`)
+```mermaid
+classDiagram
+    class Game {
+        +Board board
+        +MinesweeperAI ai
+        +int num_mines
+        +int num_hints
+        +int hints
+        +bool first_click
+        +bool auto_solve
+        +bool player_moved
+        +hint()
+        +play_ai_turn()
+        +check_win()
+    }
+    class Board {
+        +Tile[][] board_list
+        +set dug
+        +int max_flags
+        +place_mines()
+        +place_clues()
+        +dig()
+        +get_unrevealed_cells()
+        +execute_ai_action()
+    }
+    class Tile {
+        +int x
+        +int y
+        +str type
+        +bool revealed
+        +bool flagged
+        +int clue_num
+    }
+    class MinesweeperAI {
+        +str difficulty
+        +take_turn()
+        +solve()
+        +guess()
+        +medium_move()
+        +move_121()
+        +helper_121()
+    }
+    Game "1" *-- "1" Board : owns
+    Board "1" *-- "100" Tile : contains
+    Game "1" *-- "1" MinesweeperAI : owns
+    MinesweeperAI ..> Board : reads
+```
+
+**Figure 10: Key class and data-structure relationships.** The Hint System is Game.hint(), not a separate class. The focused UML in Section 7.4 shows the custom feature without the AI methods.
 
 # 10. Interface Description
 
@@ -587,29 +768,29 @@ When a mine is revealed, the mine locations are displayed to indicate the loss c
 
 | Input | Result |
 |:---:|:---:|
-| Left-click covered cell | Attempts to reveal the selected tile. |
-| Right-click covered cell | Places or removes a flag when the action is valid. |
-| Left-click after game over | Starts a new game according to the current restart behavior. |
-
-(`AUTHORS NOTE TO FINISH SECTION WHEN CODE FINISHED`)
+| Console: mine count 10–20 | Sets num_mines. Invalid input is rejected. |
+| Console: hint count 0–3 | Sets num_hints. Invalid input is rejected. |
+| Console: difficulty 1/2/3 | Chooses Easy, Medium, or Hard. |
+| Left-click covered unflagged tile | Reveals tile; first reveal initializes mines and clues. |
+| Right-click covered tile | Adds/removes flag within mine-count limit. |
+| Click Hint (n) | Uses one available safe-reveal hint in human mode. |
+| Click Mode: ... | Toggles Human vs AI / Full AI. |
+| Mouse click on game-over screen | Starts a new round; clicking mode also toggles the mode. |
+| Window close | Quits Pygame. |
 
 ## 10.3 AI Controls
 
-The current Project 2 implementation uses an AI autoplay setting stored in settings.py.
+The difficulty is selected once through console prompts and stored in Game.ai.difficulty.
 
-When AI autoplay is enabled, the AI receives a turn after a valid player action. Game.play_ai_turn() requests the AI action and applies it to the same Board used by the player.
+The Pygame HUD displays Playing | AI: <difficulty> in Human vs AI mode or Full AI solving | AI: <difficulty> in Full AI mode.
 
-The current Easy AI automatically uses random selection.
+Clicking the mode button changes Game.auto_solve. In Human vs AI mode, AI_AUTO_PLAY_ENABLED in settings.py determines whether the AI responds after a valid player action.
 
-(`AUTHORS NOTE TO FINISH SECTION WHEN CODE FINISHED`)
+In Full AI mode, Game.run() calls play_ai_turn() repeatedly without requiring a human move. AI_MOVE_DELAY_MS (850 ms in the supplied settings) pauses between AI actions.
 
 ## 10.4 Hint Controls
 
-The final player control for requesting a hint and the display of remaining hints will be documented after the Hint System is integrated.
-
-The interface should communicate the number of hints remaining and prevent additional hints after the allowed number has been used.
-
-(`AUTHORS NOTE TO FINISH SECTION WHEN CODE FINISHED`)
+The console accepts 0–3 hints. Game.draw() displays Hint (n) below the board. Clicking it in human mode calls Game.hint(), which safely reveals an eligible tile and decrements hints. If zero hints remain, nothing happens. Full AI mode ignores the hint button.
 
 ## 10.5 Game Information
 
@@ -623,32 +804,29 @@ The interface currently displays information necessary for the player to underst
 - Win/loss information.
 - Player/AI result information when AI autoplay is active.
 
-The final interface documentation should additionally identify the selected AI difficulty and remaining Hint System uses if those values are displayed in the completed implementation.
-
+The HUD shows game status, selected AI difficulty, number of mines, flags remaining, board coordinates, remaining hints, and current mode. End messages distinguish player victory, AI victory, AI mine loss in Full AI mode, a stalled Full AI solver, and general game over.
 
 # 11. Quality and Extensibility
 
-(`AUTHORS NOTE TO FINISH SECTION WHEN CODE FINISHED`)
-
 ### Maintainability
 
-(`AUTHORS NOTE TO FINISH SECTION WHEN CODE FINISHED`)
+The application separates UI/game coordination (`main.py`), board and tile representation (`sprites.py`), AI strategies (`ai_solver.py`), and constants (`settings.py`). Future teams can extend the AI without rewriting the Board or Pygame drawing. The Hint System reuses Board.dig() and the existing Tile representation.
 
 ### Reliability
 
-(`AUTHORS NOTE TO FINISH SECTION WHEN CODE FINISHED`)
+Mouse-to-grid conversion checks bounds, normal player reveals reject flagged/revealed tiles, and the Board prevents flagged cells from being uncovered. Board.execute_ai_action() validates coordinates and caps AI flags. The first-action safe zone prevents a mine on the initial reveal. Input loops reject invalid startup values. These are code-level protections; they do not substitute for a full test suite.
 
 ### AI Extensibility
 
-(`AUTHORS NOTE TO FINISH SECTION WHEN CODE FINISHED`)
+solve() routes decisions by difficulty. New strategies can be added as methods returning (x,y,action) or None, using guess() as a fallback. Because Game.play_ai_turn() consumes the same action format, a new difficulty need not alter the UI or Board action executor.
 
 ### Feature Extensibility
 
-(`AUTHORS NOTE TO FINISH SECTION WHEN CODE FINISHED`)
+New player features can be connected through Game.events() and rendered in Game.draw(), while reusing the shared Board methods. The hint implementation illustrates this pattern, and its remaining count is reset at the start of each round.
 
 ### Known Architectural Limitations
 
-(`AUTHORS NOTE TO FINISH SECTION WHEN CODE FINISHED`)
+- **Shared controller responsibilities:** `Game` manages Pygame events, status, AI coordination, and hints; future refactoring could isolate UI/controller and hint logic into separate classes.
 
 ---
 

@@ -149,17 +149,25 @@ Follow these steps to run the enhanced Minesweeper system locally.
 
 1. Clone the repository
 
-   - git clone https://github.com/phsadhankar/EECS-581-Project-2/tree/feature-branch
+   - git clone https://github.com/phsadhankar/EECS-581-Project-2.git
 
 2. Navigate into the project directory
 
-   - cd EECS-581-Project-2/src
+   - cd EECS-581-Project-2
 
-3. Install Pygame (if needed)
+3. Switch to the Project 2 development branch
+
+   - git switch feature-branch
+
+4. Install Pygame (if needed)
 
    - python3 -m pip install pygame
 
-4. Run the program
+5. Navigate to the source code directory
+
+   - cd src
+
+6. Run the program
 
    - python3 main.py
 
@@ -212,27 +220,27 @@ If a mine is uncovered, the game ends and the mines are revealed.
 
 - [x] Easy AI
 - [x] Medium AI
-- [ ] Hard AI
-- [ ] Random fallback behavior
-- [ ] AI testing
+- [x] Hard AI
+- [x] Random fallback behavior
+- [x] AI testing
 
 ### Custom Addition
 
 - [x] Select custom feature
-- [ ] Design custom feature
-- [ ] Create UML diagram
-- [ ] Implement custom feature
-- [ ] Test custom feature
+- [x] Design custom feature
+- [x] Create UML diagram
+- [x] Implement custom feature
+- [x] Test custom feature
 
 ### Documentation and Testing
 
 - [x] Person-hours estimate
-- [ ] Actual person-hours accounting
-- [ ] System architecture overview
-- [ ] System architecture diagram
-- [ ] Code documentation and comments
-- [ ] Final testing
-- [ ] Final demonstration
+- [x] Actual person-hours accounting
+- [x] System architecture overview
+- [x] System architecture diagram
+- [x] Code documentation and comments
+- [x] Final testing
+- [x] Final demonstration
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
